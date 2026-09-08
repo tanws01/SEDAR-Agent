@@ -1,0 +1,16 @@
+{
+  "name": "sedar-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-powered WhatsApp nutrition assistant",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "openai": "^5.12.0"
+  }
+}
