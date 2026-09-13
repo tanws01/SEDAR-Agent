@@ -1,14 +1,14 @@
-# SEDAR 🥗
+# SEDAR Agent 🥗
 
-**Proactive AI nutrition agent living in Telegram.**
+**A proactive AI nutrition agent living in Telegram.**
 
-SEDAR is designed around a simple idea: nutrition support should not stop at answering a question. It should understand the user's ongoing food context, remember what was logged, research when needed, help decide what to eat next, and proactively follow up.
+SEDAR Agent is designed around a simple idea: nutrition support should not stop at answering a question. It should understand the user's ongoing food context, remember what was logged, research when needed, help decide what to eat next, and proactively follow up.
 
 > **Hackathon:** AI Tinkerers Kuala Lumpur — *Agents, Everywhere*
 
-## What makes SEDAR an agent?
+## What makes SEDAR Agent an agent?
 
-SEDAR moves beyond a traditional chatbot by combining:
+SEDAR Agent moves beyond a traditional chatbot by combining:
 
 - **Persistent context** — remembers goals, preferences and recent meals.
 - **Multimodal perception** — turns a Telegram food photo into a structured nutrition estimate.
@@ -21,13 +21,13 @@ SEDAR moves beyond a traditional chatbot by combining:
 
 ## Demo flow
 
-1. Open SEDAR in **Telegram**.
+1. Open **SEDAR Agent** in Telegram.
 2. Run `/goal build muscle while staying lean`.
 3. Send a photo of a Malaysian meal.
-4. SEDAR uses **OpenAI vision** to estimate the meal and logs it.
+4. SEDAR Agent uses **OpenAI vision** to estimate the meal and logs it.
 5. Run `/today` to see the persistent daily nutrition state.
 6. Ask **“Plan my dinner”**.
-7. SEDAR researches relevant options, considers today's intake + the goal, and produces a practical dinner recommendation.
+7. SEDAR Agent researches relevant options, considers today's intake + the goal, and produces a practical dinner recommendation.
 8. **Trigger.dev** can continue the workflow in the background and send a proactive follow-up.
 9. Use `/dashboard` to inspect the operations surface and `/api/copilotkit` for the CopilotKit runtime.
 10. Run the **Mozilla.ai** evaluation harness to test safety, uncertainty handling and agent behaviour.
@@ -36,7 +36,7 @@ SEDAR moves beyond a traditional chatbot by combining:
 
 | Command | Purpose |
 |---|---|
-| `/start` | Start SEDAR and see available actions |
+| `/start` | Start SEDAR Agent and see available actions |
 | `/help` | Show usage |
 | `/goal ...` | Set or update the user's nutrition goal |
 | `/today` | View today's logged nutrition |
@@ -92,7 +92,7 @@ Copy `.env.example` to `.env` and configure the required values.
 1. Open **BotFather** in Telegram and create a bot with `/newbot`.
 2. Keep the bot token private; do **not** commit it to GitHub.
 3. Set `TELEGRAM_BOT_TOKEN` in your deployment environment.
-4. Set `PUBLIC_BASE_URL` to the public HTTPS URL of the deployed SEDAR server.
+4. Set `PUBLIC_BASE_URL` to the public HTTPS URL of the deployed SEDAR Agent server.
 5. Set `ADMIN_SETUP_TOKEN` to a private setup secret.
 6. Call the protected endpoint below once to register the webhook:
 
@@ -116,24 +116,24 @@ If Supabase is configured, run `supabase/schema.sql` and provide:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-Without Supabase, SEDAR falls back to in-memory state for local development.
+Without Supabase, SEDAR Agent falls back to in-memory state for local development.
 
 ## Optional integrations
 
-The remaining sponsor integrations are configured through `.env.example`. They are intentionally optional so SEDAR can still run with the core Telegram + OpenAI flow.
+The remaining sponsor integrations are configured through `.env.example`. They are intentionally optional so SEDAR Agent can still run with the core Telegram + OpenAI flow.
 
 **Important:** credentials are never included in the repository. Some integrations require their own account, endpoint or deployment configuration before they become active.
 
 ## Safety
 
-SEDAR is a **general nutrition education and food companion**, not a doctor or medical treatment system.
+SEDAR Agent is a **general nutrition education and food companion**, not a doctor or medical treatment system.
 
 - Nutrition values are estimates, especially from photos.
-- SEDAR should communicate uncertainty rather than imply false precision.
+- SEDAR Agent should communicate uncertainty rather than imply false precision.
 - It must not diagnose conditions or prescribe treatment.
 - It must not tell users to start, stop or change prescription medication.
 - Users with medical concerns should consult an appropriately qualified healthcare professional.
-- Do not send passwords, identity documents, financial credentials or other unnecessary sensitive information to the bot.
+- Do not send passwords, identity documents, financial credentials or other unnecessary sensitive information to the agent.
 
 ## Repository
 
