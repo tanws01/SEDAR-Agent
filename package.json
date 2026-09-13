@@ -1,9 +1,9 @@
 {
-  "name": "sedar-bot",
+  "name": "sedar-agent",
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "SEDAR — proactive AI nutrition agent living in Telegram",
+  "description": "SEDAR Agent — proactive AI nutrition agent living in Telegram",
   "engines": { "node": ">=24" },
   "scripts": {
     "dev": "node --watch src/server.js",
