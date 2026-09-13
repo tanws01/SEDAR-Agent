@@ -137,4 +137,4 @@ SEDAR Agent is a **general nutrition education and food companion**, not a docto
 
 ## Repository
 
-`tanws01/SEDAR-Bot`
+`tanws01/SEDAR-Agent`
