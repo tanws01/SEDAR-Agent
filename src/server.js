@@ -1,6 +1,4 @@
 import express from "express";
-import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
-import { CopilotRuntime, BuiltInAgent } from "@copilotkit/runtime/v2";
 import { auth } from "express-oauth2-jwt-bearer";
 import { getUser, addMeal, updateGoal, getDailySummary, resetState } from "./store.js";
 import { answerNutritionQuestion, analyzeMealImage, planDinner } from "./agent.js";
@@ -14,11 +12,9 @@ const port = Number(process.env.PORT || 3000);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 const processedUpdates = new Map();
 
-const copilotRuntime = new CopilotRuntime({ agents: { default: new BuiltInAgent({ model: process.env.COPILOTKIT_MODEL || "openai/gpt-5-mini", prompt: "You are the SEDAR Agent nutrition operations copilot. Help review nutrition state, meal logs, goals and agent decisions. Do not diagnose or prescribe." }) } });
-
 app.get("/", (_req, res) => res.json({ name: "SEDAR Agent", status: "ok", channel: "telegram", agent: true, version: "3.0.0" }));
 app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString(), agent: "SEDAR Agent" }));
-app.use(createCopilotExpressHandler({ runtime: copilotRuntime, basePath: "/api/copilotkit", cors: true }));
+
 app.get("/dashboard", (_req, res) => res.sendFile("dashboard.html", { root: new URL("../public", import.meta.url).pathname }));
 
 app.post("/telegram/webhook", async (req, res) => {
