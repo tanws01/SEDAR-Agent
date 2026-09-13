@@ -1,151 +1,100 @@
 import express from "express";
-import OpenAI from "openai";
+import { createCopilotExpressHandler } from "@copilotkit/runtime/v2/express";
+import { CopilotRuntime, BuiltInAgent } from "@copilotkit/runtime/v2";
+import { auth } from "express-oauth2-jwt-bearer";
+import { getUser, addMeal, updateGoal, getDailySummary, resetState } from "./store.js";
+import { answerNutritionQuestion, analyzeMealImage, planDinner } from "./agent.js";
+import { sendTelegramMessage, setTelegramWebhook, parseTelegramUpdate, downloadTelegramPhoto } from "./telegram.js";
+import { triggerNutritionMonitor } from "./integrations.js";
 
 const app = express();
-app.use(express.json({ limit: "2mb" }));
-
+app.use(express.json({ limit: "10mb" }));
 const port = Number(process.env.PORT || 3000);
-const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
-const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const graphApiVersion = process.env.WHATSAPP_GRAPH_API_VERSION || "v23.0";
-const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 
-const SYSTEM_PROMPT = `You are SEDAR Bot, a professional AI nutrition education assistant available through WhatsApp.
-
-Your role:
-- Give practical, evidence-informed nutrition education in a professional, calm and approachable tone.
-- Prioritize authoritative public-health and clinical nutrition sources when current evidence is needed, especially Malaysian Ministry of Health, WHO, FAO, NHS, CDC and peer-reviewed research.
-- Use web search when the question depends on current guidance, a specific product, food safety issue, or evidence that may have changed.
-- Adapt examples to Malaysia when useful, including common Malaysian foods and eating patterns.
-- Support English, Bahasa Melayu and Chinese. Reply in the language the user uses unless they request another language.
-- For calorie or macro estimates, clearly label them as estimates and state the assumptions or portion size used.
-- If information is insufficient, ask a short clarifying question instead of inventing details.
-
-Safety boundaries:
-- You are not a doctor, dietitian, pharmacist, or emergency service. Do not claim to diagnose, prescribe, or replace professional care.
-- Do not diagnose medical conditions or tell users to start, stop, or change prescription medication.
-- For pregnancy, eating disorders, severe allergies, diabetes medication, kidney/liver disease, serious symptoms, or other high-risk medical situations, provide general educational information and recommend speaking with an appropriate qualified healthcare professional.
-- For possible emergencies (for example severe breathing difficulty, chest pain, loss of consciousness, severe allergic reaction, or signs of stroke), tell the user to seek emergency medical care immediately.
-- Avoid extreme dieting, starvation, purging, or unsafe rapid-weight-loss advice.
-
-Response style:
-- Answer the user's question directly first.
-- Keep WhatsApp responses easy to scan: short paragraphs and bullets where helpful.
-- Do not overwhelm the user with citations. When web search is used, mention the most relevant sources naturally at the end.
-- Never fabricate a study, guideline, number, citation, or food composition value.
-- End with a useful next step or a brief follow-up question when appropriate.
-
-Important disclaimer when relevant: SEDAR Bot provides general nutrition education and is not a substitute for individualized medical advice from a qualified healthcare professional.`;
-
-app.get("/", (_req, res) => {
-  res.json({ name: "SEDAR Bot", status: "ok", service: "nutrition-assistant" });
-});
-
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode === "subscribe" && token === verifyToken) {
-    return res.status(200).send(challenge);
-  }
-  return res.sendStatus(403);
-});
-
-app.post("/webhook", async (req, res) => {
-  // Acknowledge Meta quickly; process the message asynchronously.
-  res.sendStatus(200);
-
-  try {
-    const message = extractIncomingText(req.body);
-    if (!message) return;
-
-    if (message.text.trim().toLowerCase() === "/help") {
-      await sendWhatsAppText(message.from, helpMessage());
-      return;
-    }
-
-    if (message.text.trim().toLowerCase() === "/privacy") {
-      await sendWhatsAppText(message.from, privacyMessage());
-      return;
-    }
-
-    const response = await openai.responses.create({
-      model,
-      store: false,
-      tools: [{ type: "web_search" }],
-      input: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: message.text }
-      ]
-    });
-
-    const answer = response.output_text?.trim() || "Sorry, I couldn't generate an answer right now. Please try again.";
-    await sendWhatsAppText(message.from, answer);
-  } catch (error) {
-    console.error("SEDAR webhook error:", error);
-    const from = extractSender(req.body);
-    if (from) {
-      try {
-        await sendWhatsAppText(from, "Sorry, SEDAR Bot is temporarily unavailable. Please try again in a moment.");
-      } catch (sendError) {
-        console.error("WhatsApp fallback error:", sendError);
-      }
-    }
-  }
-});
-
-function extractIncomingText(body) {
-  const value = body?.entry?.[0]?.changes?.[0]?.value;
-  const message = value?.messages?.[0];
-  if (!message || message.type !== "text" || !message.from) return null;
-  return { from: message.from, text: message.text?.body || "" };
-}
-
-function extractSender(body) {
-  return body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from || null;
-}
-
-async function sendWhatsAppText(to, body) {
-  if (!accessToken || !phoneNumberId) {
-    throw new Error("Missing WhatsApp credentials");
-  }
-
-  const url = `https://graph.facebook.com/${graphApiVersion}/${phoneNumberId}/messages`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { preview_url: false, body }
+const copilotRuntime = new CopilotRuntime({
+  agents: {
+    default: new BuiltInAgent({
+      model: process.env.COPILOTKIT_MODEL || "openai/gpt-5-mini",
+      prompt: "You are the SEDAR nutrition operations copilot. Help review nutrition state, meal logs, goals and agent decisions. Do not diagnose or prescribe."
     })
-  });
-
-  if (!response.ok) {
-    const details = await response.text();
-    throw new Error(`WhatsApp API ${response.status}: ${details}`);
   }
-}
+});
+
+app.get("/", (_req, res) => res.json({ name: "SEDAR", status: "ok", channel: "telegram", agent: true }));
+app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
+
+app.use(createCopilotExpressHandler({ runtime: copilotRuntime, basePath: "/api/copilotkit", cors: true }));
+app.get("/dashboard", (_req, res) => res.sendFile("dashboard.html", { root: new URL("../public", import.meta.url).pathname }));
+
+app.post("/telegram/webhook", async (req, res) => {
+  res.sendStatus(200);
+  try {
+    const update = parseTelegramUpdate(req.body);
+    if (!update) return;
+    const userId = String(update.chatId);
+    const text = update.text?.trim() || "";
+
+    if (text === "/start" || text === "/help") return void await sendTelegramMessage(update.chatId, helpMessage());
+    if (text === "/privacy") return void await sendTelegramMessage(update.chatId, privacyMessage());
+    if (text.startsWith("/goal ")) {
+      const goal = text.slice(6).trim();
+      await updateGoal(userId, { description: goal });
+      return void await sendTelegramMessage(update.chatId, `Saved. Your current goal is now: ${goal}`);
+    }
+    if (text === "/today") return void await sendTelegramMessage(update.chatId, formatSummary(await getDailySummary(userId)));
+    if (text === "/reset") {
+      await resetState(userId);
+      return void await sendTelegramMessage(update.chatId, "Your SEDAR nutrition state has been reset.");
+    }
+
+    if (update.photo) {
+      const meal = await analyzeMealImage(await downloadTelegramPhoto(update.photo.fileId), await getUser(userId));
+      await addMeal(userId, meal);
+      const summary = await getDailySummary(userId);
+      await sendTelegramMessage(update.chatId, mealReply(meal, summary));
+      await triggerNutritionMonitor({ userId, chatId: update.chatId, reason: "meal_logged" });
+      return;
+    }
+
+    const user = await getUser(userId);
+    if (/plan my dinner|what should i eat|dinner/i.test(text)) {
+      return void await sendTelegramMessage(update.chatId, await planDinner(user, await getDailySummary(userId)));
+    }
+
+    await sendTelegramMessage(update.chatId, await answerNutritionQuestion(text, user));
+    await triggerNutritionMonitor({ userId, chatId: update.chatId, reason: "conversation" });
+  } catch (error) {
+    console.error("SEDAR Telegram error:", error);
+    const chatId = parseTelegramUpdate(req.body)?.chatId;
+    if (chatId) await sendTelegramMessage(chatId, "SEDAR is temporarily unavailable. Please try again in a moment.");
+  }
+});
+
+app.post("/telegram/set-webhook", async (req, res) => {
+  if (!telegramToken || req.get("x-sedar-admin-token") !== process.env.ADMIN_SETUP_TOKEN) return res.sendStatus(401);
+  const webhookUrl = req.body?.url || `${process.env.PUBLIC_BASE_URL}/telegram/webhook`;
+  res.json(await setTelegramWebhook(webhookUrl));
+});
+
+const checkJwt = process.env.AUTH0_DOMAIN && process.env.AUTH0_AUDIENCE
+  ? auth({ audience: process.env.AUTH0_AUDIENCE, issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`, tokenSigningAlg: "RS256" })
+  : (_req, _res, next) => next();
+
+app.get("/api/admin/user/:id", checkJwt, async (req, res) => res.json(await getUser(req.params.id)));
+app.get("/api/admin/summary/:id", checkJwt, async (req, res) => res.json(await getDailySummary(req.params.id)));
+
+app.listen(port, () => console.log(`SEDAR listening on :${port}`));
 
 function helpMessage() {
-  return `Hi, I'm SEDAR Bot 🥗\n\nI can help with:\n• Nutrition questions\n• Malaysian food choices\n• Calories & macronutrient estimates\n• Meal and portion guidance\n• Evidence-based nutrition information\n\nTry asking: “Is nasi lemak healthy?” or “How much protein should I eat?”\n\nFor medical conditions or personalized treatment, please consult a qualified healthcare professional.`;
+  return `🥗 SEDAR — your AI nutrition companion\n\nSend me a meal photo and I'll estimate what's on your plate, update today's nutrition state and help you decide what to eat next.\n\nTry:\n• Send a food photo\n• “Plan my dinner”\n• /today\n• /goal build muscle while staying lean\n• /privacy\n\nSEDAR provides general nutrition education, not diagnosis or treatment.`;
 }
-
 function privacyMessage() {
-  return `SEDAR Bot is designed for general nutrition education. Please avoid sharing passwords, financial information, identification numbers, or other unnecessary sensitive personal information. Do not use the bot for emergencies or as a substitute for professional medical care.`;
+  return `SEDAR stores only the nutrition context needed to make the agent useful. Avoid sending passwords, ID numbers, financial data or other unnecessary sensitive information. You can reset your nutrition state with /reset.`;
 }
-
-app.listen(port, () => {
-  console.log(`SEDAR Bot listening on port ${port}`);
-});
+function formatSummary(summary) {
+  return `📊 Today\nCalories: ${Math.round(summary.calories)} kcal\nProtein: ${Math.round(summary.protein)} g\nCarbs: ${Math.round(summary.carbs)} g\nFat: ${Math.round(summary.fat)} g\nMeals logged: ${summary.meals}`;
+}
+function mealReply(meal, summary) {
+  return `🍽️ Meal logged\n${meal.name}\n≈ ${meal.calories} kcal · ${meal.protein}g protein · ${meal.carbs}g carbs · ${meal.fat}g fat\n\nToday so far: ${Math.round(summary.calories)} kcal · ${Math.round(summary.protein)}g protein\n\n${meal.confidenceNote || "These are estimates based on the visible portion."}\n\nAsk “plan my dinner” and I’ll use today's intake + your goal to recommend what to eat next.`;
+}
