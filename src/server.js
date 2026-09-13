@@ -16,13 +16,13 @@ const copilotRuntime = new CopilotRuntime({
   agents: {
     default: new BuiltInAgent({
       model: process.env.COPILOTKIT_MODEL || "openai/gpt-5-mini",
-      prompt: "You are the SEDAR nutrition operations copilot. Help review nutrition state, meal logs, goals and agent decisions. Do not diagnose or prescribe."
+      prompt: "You are the SEDAR Agent nutrition operations copilot. Help review nutrition state, meal logs, goals and agent decisions. Do not diagnose or prescribe."
     })
   }
 });
 
-app.get("/", (_req, res) => res.json({ name: "SEDAR", status: "ok", channel: "telegram", agent: true }));
-app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
+app.get("/", (_req, res) => res.json({ name: "SEDAR Agent", status: "ok", channel: "telegram", agent: true }));
+app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString(), agent: "SEDAR Agent" }));
 
 app.use(createCopilotExpressHandler({ runtime: copilotRuntime, basePath: "/api/copilotkit", cors: true }));
 app.get("/dashboard", (_req, res) => res.sendFile("dashboard.html", { root: new URL("../public", import.meta.url).pathname }));
@@ -45,7 +45,7 @@ app.post("/telegram/webhook", async (req, res) => {
     if (text === "/today") return void await sendTelegramMessage(update.chatId, formatSummary(await getDailySummary(userId)));
     if (text === "/reset") {
       await resetState(userId);
-      return void await sendTelegramMessage(update.chatId, "Your SEDAR nutrition state has been reset.");
+      return void await sendTelegramMessage(update.chatId, "Your SEDAR Agent nutrition state has been reset.");
     }
 
     if (update.photo) {
@@ -65,9 +65,9 @@ app.post("/telegram/webhook", async (req, res) => {
     await sendTelegramMessage(update.chatId, await answerNutritionQuestion(text, user));
     await triggerNutritionMonitor({ userId, chatId: update.chatId, reason: "conversation" });
   } catch (error) {
-    console.error("SEDAR Telegram error:", error);
+    console.error("SEDAR Agent Telegram error:", error);
     const chatId = parseTelegramUpdate(req.body)?.chatId;
-    if (chatId) await sendTelegramMessage(chatId, "SEDAR is temporarily unavailable. Please try again in a moment.");
+    if (chatId) await sendTelegramMessage(chatId, "SEDAR Agent is temporarily unavailable. Please try again in a moment.");
   }
 });
 
@@ -84,17 +84,17 @@ const checkJwt = process.env.AUTH0_DOMAIN && process.env.AUTH0_AUDIENCE
 app.get("/api/admin/user/:id", checkJwt, async (req, res) => res.json(await getUser(req.params.id)));
 app.get("/api/admin/summary/:id", checkJwt, async (req, res) => res.json(await getDailySummary(req.params.id)));
 
-app.listen(port, () => console.log(`SEDAR listening on :${port}`));
+app.listen(port, () => console.log(`SEDAR Agent listening on :${port}`));
 
 function helpMessage() {
-  return `🥗 SEDAR — your AI nutrition companion\n\nSend me a meal photo and I'll estimate what's on your plate, update today's nutrition state and help you decide what to eat next.\n\nTry:\n• Send a food photo\n• “Plan my dinner”\n• /today\n• /goal build muscle while staying lean\n• /privacy\n\nSEDAR provides general nutrition education, not diagnosis or treatment.`;
+  return `🥗 SEDAR Agent — your AI nutrition companion\n\nSend me a meal photo and I'll estimate what's on your plate, update today's nutrition state and help you decide what to eat next.\n\nTry:\n• Send a food photo\n• “Plan my dinner”\n• /today\n• /goal build muscle while staying lean\n• /privacy\n\nSEDAR Agent provides general nutrition education, not diagnosis or treatment.`;
 }
 function privacyMessage() {
-  return `SEDAR stores only the nutrition context needed to make the agent useful. Avoid sending passwords, ID numbers, financial data or other unnecessary sensitive information. You can reset your nutrition state with /reset.`;
+  return `SEDAR Agent stores only the nutrition context needed to make the agent useful. Avoid sending passwords, ID numbers, financial data or other unnecessary sensitive information. You can reset your nutrition state with /reset.`;
 }
 function formatSummary(summary) {
   return `📊 Today\nCalories: ${Math.round(summary.calories)} kcal\nProtein: ${Math.round(summary.protein)} g\nCarbs: ${Math.round(summary.carbs)} g\nFat: ${Math.round(summary.fat)} g\nMeals logged: ${summary.meals}`;
 }
 function mealReply(meal, summary) {
-  return `🍽️ Meal logged\n${meal.name}\n≈ ${meal.calories} kcal · ${meal.protein}g protein · ${meal.carbs}g carbs · ${meal.fat}g fat\n\nToday so far: ${Math.round(summary.calories)} kcal · ${Math.round(summary.protein)}g protein\n\n${meal.confidenceNote || "These are estimates based on the visible portion."}\n\nAsk “plan my dinner” and I’ll use today's intake + your goal to recommend what to eat next.`;
+  return `🍽️ Meal logged\n${meal.name}\n≈ ${meal.calories} kcal · ${meal.protein}g protein · ${meal.carbs}g carbs · ${meal.fat}g fat\n\nToday so far: ${Math.round(summary.calories)} kcal · ${Math.round(summary.protein)}g protein\n\n${meal.confidenceNote || "These are estimates based on the visible portion."}\n\nAsk “plan my dinner” and SEDAR Agent will use today's intake + your goal to recommend what to eat next.`;
 }
