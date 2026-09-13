@@ -28,8 +28,9 @@ export function mealCard(meal, summary) {
   return `🍽️ <b>MEAL INTELLIGENCE</b>\n\n<b>${escapeHtml(meal.name)}</b>\n\n🔥 <b>${Math.round(meal.calories)} kcal</b>\n💪 ${Math.round(meal.protein)}g protein  ·  🍚 ${Math.round(meal.carbs)}g carbs  ·  🥑 ${Math.round(meal.fat)}g fat\n\n🔎 <b>SEDAR read</b>\n${escapeHtml(meal.portionAssumptions || "Portion estimated from the photo.")}\n\n📈 <b>Today so far:</b> ${Math.round(summary.calories)} kcal · ${Math.round(summary.protein)}g protein\n\n⚠️ ${escapeHtml(meal.confidenceNote || "Image-based estimates can vary with portion size and hidden ingredients.")}`;
 }
 
-export function errorCard() {
-  return `⚠️ <b>SEDAR hit a temporary issue.</b>\n\nYour request was not lost. Please try again in a moment.`;
+export function errorCard(error) {
+  const detail = error?.message ? `\n\n<code>${escapeHtml(String(error.message).slice(0, 300))}</code>` : "";
+  return `⚠️ <b>SEDAR hit a temporary issue.</b>\n\nYour request was not lost. Please try again in a moment.${detail}`;
 }
 
 function progress(value, target) {

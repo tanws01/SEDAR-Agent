@@ -19,16 +19,18 @@ app.get("/dashboard", (_req, res) => res.sendFile("dashboard.html", { root: new 
 
 app.post("/telegram/webhook", async (req, res) => {
   if (!isValidTelegramWebhook(req)) return res.sendStatus(401);
-  res.sendStatus(200);
   const update = parseTelegramUpdate(req.body);
-  if (!update) return;
-  if (update.updateId != null && processedUpdates.has(update.updateId)) return;
+  if (!update) return res.sendStatus(200);
+  if (update.updateId != null && processedUpdates.has(update.updateId)) return res.sendStatus(200);
   if (update.updateId != null) { processedUpdates.set(update.updateId, Date.now()); if (processedUpdates.size > 500) processedUpdates.delete(processedUpdates.keys().next().value); }
+  // Do the work BEFORE responding. On serverless the instance can be frozen/killed
+  // once the response is sent, which silently drops the async AI reply.
   try { await handleTelegramUpdate(update); }
   catch (error) {
     console.error("SEDAR Agent Telegram error:", error);
-    try { await sendTelegramMessage(update.chatId, errorCard(), mainMenu()); } catch (sendError) { console.error("SEDAR fallback error:", sendError); }
+    try { await sendTelegramMessage(update.chatId, errorCard(error), mainMenu()); } catch (sendError) { console.error("SEDAR fallback error:", sendError); }
   }
+  res.sendStatus(200);
 });
 
 async function handleTelegramUpdate(update) {
