@@ -2,12 +2,12 @@ import OpenAI from "openai";
 import { exaSearch, ambiguousAssistant, assuranceEvent } from "./integrations.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const model = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+const model = process.env.OPENAI_MODEL || "gpt-4o";
 const SYSTEM = `You are SEDAR, a professional AI nutrition education companion inside Telegram. Never diagnose or prescribe. Use user context. Be practical, concise, evidence-informed and Malaysia-aware. Clearly label estimates.`;
 
 export async function answerNutritionQuestion(question, user) {
   const research = /latest|current|safe|guideline|research|study|supplement|food safety/i.test(question) ? await exaSearch(`${question} nutrition evidence Malaysia`, 4) : "";
-  const response = await openai.responses.create({ model, store: false, tools: [{ type: "web_search" }], input: [{ role: "system", content: `${SYSTEM}\nUser state: ${JSON.stringify(user)}\nResearch: ${research}` }, { role: "user", content: question }] });
+  const response = await openai.responses.create({ model, store: false, input: [{ role: "system", content: `${SYSTEM}\nUser state: ${JSON.stringify(user)}\nResearch: ${research}` }, { role: "user", content: question }] });
   const answer = response.output_text?.trim() || "I couldn't generate an answer right now.";
   await assuranceEvent({ action: "nutrition_answer", metadata: { researchUsed: Boolean(research) } });
   return answer;
@@ -31,8 +31,13 @@ export async function planDinner(user, summary) {
 }
 
 async function openRouterChat(prompt, context, research) {
-  if (!process.env.OPENROUTER_API_KEY) throw new Error("Missing OPENROUTER_API_KEY");
+  // OpenRouter is an optional model-routing layer. When it isn't configured,
+  // fall back to the primary OpenAI path so dinner planning still works.
+  if (!process.env.OPENROUTER_API_KEY) {
+    const response = await openai.responses.create({ model, store: false, input: [{ role: "system", content: `${SYSTEM}\nContext: ${context}\nResearch: ${research}` }, { role: "user", content: prompt }] });
+    return response.output_text?.trim() || "I couldn't generate an answer right now.";
+  }
   const client = new OpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey: process.env.OPENROUTER_API_KEY, defaultHeaders: { "HTTP-Referer": process.env.PUBLIC_BASE_URL || "http://localhost:3000", "X-OpenRouter-Title": "SEDAR" } });
-  const response = await client.chat.completions.create({ model: process.env.OPENROUTER_MODEL || "openai/gpt-5-mini", messages: [{ role: "system", content: `${SYSTEM}\nContext: ${context}\nResearch: ${research}` }, { role: "user", content: prompt }] });
+  const response = await client.chat.completions.create({ model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini", messages: [{ role: "system", content: `${SYSTEM}\nContext: ${context}\nResearch: ${research}` }, { role: "user", content: prompt }] });
   return response.choices?.[0]?.message?.content?.trim() || "I couldn't generate an answer right now.";
 }
